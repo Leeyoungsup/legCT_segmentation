@@ -20,18 +20,28 @@ params={'image_size':512,
         'lr':2e-4,
         'beta1':0.5,
         'beta2':0.999,
-        'batch_size':16,
-        'epochs':300,}
+        'batch_size':8,
+        'epochs':100,}
 image1=np.load('../../data/cv0_ori.npy')
+image1=image1.astype(np.uint8)
 image2=np.load('../../data/cv1_ori.npy')
+image2=image2.astype(np.uint8)
 image3=np.load('../../data/cv2_ori.npy')
+image3=image3.astype(np.uint8)
 image4=np.load('../../data/cv3_ori.npy')
+image4=image4.astype(np.uint8)
 image5=np.load('../../data/cv4_ori.npy')
+image5=image5.astype(np.uint8)
 mask1=np.load('../../data/cv0_mask.npy')
+mask1=(mask1*255).astype(np.uint8)
 mask2=np.load('../../data/cv1_mask.npy')
+mask2=(mask2*255).astype(np.uint8)
 mask3=np.load('../../data/cv2_mask.npy')
+mask3=(mask3*255).astype(np.uint8)
 mask4=np.load('../../data/cv3_mask.npy')
+mask4=(mask4*255).astype(np.uint8)
 mask5=np.load('../../data/cv4_mask.npy')
+mask5=(mask5*255).astype(np.uint8)
 
 np_data={'image1':image1,'image2':image2,'image3':image3,'image4':image4,'image5':image5,'mask1':mask1,'mask2':mask2,'mask3':mask3,'mask4':mask4,'mask5':mask5}
 
@@ -48,7 +58,7 @@ class CustomDataset(Dataset):
         image_path=tf(cv2.cvtColor(image_path, cv2.COLOR_GRAY2RGB))
         
         label_path = self.label[idx]
-        label_path = tf(cv2.resize(label_path, (128, 128)))
+        label_path = tf(cv2.resize(label_path, (512, 512)))
        
         return image_path, label_path
     
@@ -91,7 +101,7 @@ for k in range(5):
     model = AutoModelForSemanticSegmentation.from_pretrained("mattmdjaga/segformer_b2_clothes",num_labels=4,ignore_mismatched_sizes=True).to(device)
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), lr=params['lr'], betas=(params['beta1'], params['beta2']))
-    for epoch in range(300):
+    for epoch in range(100):
         train = tqdm(train_dataloader)
         count = 0
         running_loss = 0.0
@@ -103,8 +113,14 @@ for k in range(5):
             x = x.to(device).float()
             optimizer.zero_grad()  # optimizer zero 로 초기화
             predict = model(x).logits.to(device)
+            predict = nn.functional.interpolate(
+                predict,
+                size=(512,512),
+                mode="bilinear",
+                align_corners=False,
+            )
             cost = dice_loss(predict, y)  # cost 구함
-            acc = 1-dice_loss(predict, y)
+            acc = 1-cost.item()
             cost.backward()  # cost에 대한 backward 구함
             optimizer.step()
             running_loss += cost.item()
@@ -123,16 +139,24 @@ for k in range(5):
                 count += 1
                 x = x.to(device).float()
                 predict = model(x).logits.to(device)
-                cost = dice_loss(predict, y)
-                acc = 1-dice_loss(predict, y)
+                predict = nn.functional.interpolate(
+                    predict,
+                    size=(512,512),
+                    mode="bilinear",
+                    align_corners=False,
+                )
+                cost = dice_loss(predict, y)  # cost 구함
+                acc = 1-cost.item()
                 val_running_loss += cost.item()
                 acc_loss += acc
+                y = y.cpu()
+                count += 1
+                x = x.cpu()
                 val.set_description(
-                    f"epoch: {epoch+1}/{300} Step: {count+1} dice_loss : {val_running_loss/count:.4f} dice_score: {1-val_running_loss/count:.4f}")
+                    f"val_epoch: {epoch+1}/{300} Step: {count+1} dice_loss : {val_running_loss/count:.4f} dice_score: {1-val_running_loss/count:.4f}")
                 if val_loss>val_running_loss/count:
                     val_loss=val_running_loss/count
                     torch.save(model.state_dict(), '../../model/segformer/seg_former_'+str(k+1)+'_check.pth')
         df.loc[len(df)]=[epoch+1,running_loss/len(train_dataloader),val_running_loss/len(validation_dataloader),1-running_loss/len(train_dataloader),1-val_running_loss/len(validation_dataloader)]
         df.to_csv('../../model/segformer/seg_former_'+str(k+1)+'.csv',index=False)
     torch.save(model.state_dict(), '../../model/segformer/seg_former_'+str(k+1)+'.pth')
-    
