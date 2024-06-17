@@ -22,7 +22,7 @@ params={'image_size':512,
         'lr':2e-4,
         'beta1':0.5,
         'beta2':0.999,
-        'batch_size':16,
+        'batch_size':64,
         'epochs':100,}
 image1=np.load('../../data/cv0_ori.npy')
 image1=image1.astype(np.uint8)
@@ -60,7 +60,7 @@ class CustomDataset(Dataset):
         image_path=tf(cv2.cvtColor(image_path, cv2.COLOR_GRAY2RGB))
         
         label_path = self.label[idx]
-        label_path = tf(cv2.resize(label_path, (128, 128)))
+        label_path = tf(cv2.resize(label_path, (512, 512)))
        
         return image_path, label_path
     
@@ -103,7 +103,7 @@ for k in range(5):
     train_dataset, batch_size=params['batch_size'], shuffle=True, drop_last=True)
     validation_dataloader = DataLoader(
     val_dataset, batch_size=params['batch_size'], shuffle=True, drop_last=True)
-    
+    ealry_count=0
     model = smp.MAnet(
         encoder_name="resnet34",        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
         encoder_weights="imagenet",     # use `imagenet` pre-trained weights for encoder initialization
@@ -150,9 +150,14 @@ for k in range(5):
                 acc_loss += acc
                 val.set_description(
                     f"val_epoch: {epoch+1}/{300} Step: {count+1} dice_loss : {val_running_loss/count:.4f} dice_score: {1-val_running_loss/count:.4f}")
-                if val_loss>val_running_loss/count:
-                    val_loss=val_running_loss/count
-                    torch.save(model.state_dict(), '../../model/MANet/MANet_'+str(k+1)+'_check.pth')
+        if val_loss>(val_running_loss/count):
+            ealry_count=0
+            val_loss=val_running_loss/count
+            torch.save(model.state_dict(), '../../model/MANet/MANet_'+str(k+1)+'_check.pth')
+        else:
+            ealry_count+=1
+            if ealry_count==5:
+                break
         df.loc[len(df)]=[epoch+1,running_loss/len(train_dataloader),val_running_loss/len(validation_dataloader),1-running_loss/len(train_dataloader),1-val_running_loss/len(validation_dataloader)]
         df.to_csv('../../model/MANet/MANet_'+str(k+1)+'.csv',index=False)
     torch.save(model.state_dict(), '../../model/MANet/MANet_'+str(k+1)+'.pth')

@@ -20,7 +20,7 @@ params={'image_size':512,
         'lr':2e-4,
         'beta1':0.5,
         'beta2':0.999,
-        'batch_size':8,
+        'batch_size':24,
         'epochs':100,}
 image1=np.load('../../data/cv0_ori.npy')
 image1=image1.astype(np.uint8)
@@ -97,7 +97,7 @@ for k in range(5):
     train_dataset, batch_size=params['batch_size'], shuffle=True, drop_last=True)
     validation_dataloader = DataLoader(
     val_dataset, batch_size=params['batch_size'], shuffle=True, drop_last=True)
-    
+    ealry_count=0
     model = AutoModelForSemanticSegmentation.from_pretrained("mattmdjaga/segformer_b2_clothes",num_labels=4,ignore_mismatched_sizes=True).to(device)
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), lr=params['lr'], betas=(params['beta1'], params['beta2']))
@@ -106,6 +106,7 @@ for k in range(5):
         count = 0
         running_loss = 0.0
         acc_loss = 0
+        
         for x, y in train:
             model.train()
             y = y.to(device).float()
@@ -154,9 +155,14 @@ for k in range(5):
                 x = x.cpu()
                 val.set_description(
                     f"val_epoch: {epoch+1}/{300} Step: {count+1} dice_loss : {val_running_loss/count:.4f} dice_score: {1-val_running_loss/count:.4f}")
-                if val_loss>val_running_loss/count:
-                    val_loss=val_running_loss/count
-                    torch.save(model.state_dict(), '../../model/segformer/seg_former_'+str(k+1)+'_check.pth')
+        if val_loss>val_running_loss/count:
+            ealry_count=0
+            val_loss=val_running_loss/count
+            torch.save(model.state_dict(), '../../model/segformer/seg_former_'+str(k+1)+'_check.pth')
+        else:
+            ealry_count+=1
+            if ealry_count==5:
+                break
         df.loc[len(df)]=[epoch+1,running_loss/len(train_dataloader),val_running_loss/len(validation_dataloader),1-running_loss/len(train_dataloader),1-val_running_loss/len(validation_dataloader)]
         df.to_csv('../../model/segformer/seg_former_'+str(k+1)+'.csv',index=False)
     torch.save(model.state_dict(), '../../model/segformer/seg_former_'+str(k+1)+'.pth')
