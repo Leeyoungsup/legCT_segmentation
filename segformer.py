@@ -81,7 +81,7 @@ def dice_loss(pred, target, num_classes=4):
 
 
 metrics = defaultdict(float)
-for k in range(5):
+for k in range(2,5):
     val_loss=1000
     df=pd.DataFrame(columns=['epoch', 'train_loss', 'val_loss', 'train_acc', 'val_acc'])
     train_list=[0,1,2,3,4]
