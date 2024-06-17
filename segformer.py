@@ -33,15 +33,15 @@ image4=image4.astype(np.uint8)
 image5=np.load('../../data/cv4_ori.npy')
 image5=image5.astype(np.uint8)
 mask1=np.load('../../data/cv0_mask.npy')
-mask1=(mask1*255).astype(np.uint8)
+mask1=(mask1[:,:,:3]*255).astype(np.uint8)
 mask2=np.load('../../data/cv1_mask.npy')
-mask2=(mask2*255).astype(np.uint8)
+mask2=(mask2[:,:,:3]*255).astype(np.uint8)
 mask3=np.load('../../data/cv2_mask.npy')
-mask3=(mask3*255).astype(np.uint8)
+mask3=(mask3[:,:,:3]*255).astype(np.uint8)
 mask4=np.load('../../data/cv3_mask.npy')
-mask4=(mask4*255).astype(np.uint8)
+mask4=(mask4[:,:,:3]*255).astype(np.uint8)
 mask5=np.load('../../data/cv4_mask.npy')
-mask5=(mask5*255).astype(np.uint8)
+mask5=(mask5[:,:,:3]*255).astype(np.uint8)
 
 np_data={'image1':image1,'image2':image2,'image3':image3,'image4':image4,'image5':image5,'mask1':mask1,'mask2':mask2,'mask3':mask3,'mask4':mask4,'mask5':mask5}
 
@@ -62,7 +62,7 @@ class CustomDataset(Dataset):
        
         return image_path, label_path
     
-def dice_loss(pred, target, num_classes=4):
+def dice_loss(pred, target, num_classes=3):
     smooth = 1.
     dice_per_class = torch.zeros(num_classes).to(pred.device)
 
@@ -81,7 +81,7 @@ def dice_loss(pred, target, num_classes=4):
 
 
 metrics = defaultdict(float)
-for k in range(2,5):
+for k in range(5):
     val_loss=1000
     df=pd.DataFrame(columns=['epoch', 'train_loss', 'val_loss', 'train_acc', 'val_acc'])
     train_list=[0,1,2,3,4]
@@ -98,10 +98,10 @@ for k in range(2,5):
     validation_dataloader = DataLoader(
     val_dataset, batch_size=params['batch_size'], shuffle=True, drop_last=True)
     ealry_count=0
-    model = AutoModelForSemanticSegmentation.from_pretrained("mattmdjaga/segformer_b2_clothes",num_labels=4,ignore_mismatched_sizes=True).to(device)
+    model = AutoModelForSemanticSegmentation.from_pretrained("mattmdjaga/segformer_b2_clothes",num_labels=3,ignore_mismatched_sizes=True).to(device)
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), lr=params['lr'], betas=(params['beta1'], params['beta2']))
-    for epoch in range(100):
+    for epoch in range(300):
         train = tqdm(train_dataloader)
         count = 0
         running_loss = 0.0
@@ -161,7 +161,7 @@ for k in range(2,5):
             torch.save(model.state_dict(), '../../model/segformer/seg_former_'+str(k+1)+'_check.pth')
         else:
             ealry_count+=1
-            if ealry_count==5:
+            if ealry_count==10:
                 break
         df.loc[len(df)]=[epoch+1,running_loss/len(train_dataloader),val_running_loss/len(validation_dataloader),1-running_loss/len(train_dataloader),1-val_running_loss/len(validation_dataloader)]
         df.to_csv('../../model/segformer/seg_former_'+str(k+1)+'.csv',index=False)

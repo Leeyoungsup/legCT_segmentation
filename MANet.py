@@ -22,7 +22,7 @@ params={'image_size':512,
         'lr':2e-4,
         'beta1':0.5,
         'beta2':0.999,
-        'batch_size':64,
+        'batch_size':16,
         'epochs':100,}
 image1=np.load('../../data/cv0_ori.npy')
 image1=image1.astype(np.uint8)
@@ -35,15 +35,15 @@ image4=image4.astype(np.uint8)
 image5=np.load('../../data/cv4_ori.npy')
 image5=image5.astype(np.uint8)
 mask1=np.load('../../data/cv0_mask.npy')
-mask1=(mask1*255).astype(np.uint8)
+mask1=(mask1[:,:,:3]*255).astype(np.uint8)
 mask2=np.load('../../data/cv1_mask.npy')
-mask2=(mask2*255).astype(np.uint8)
+mask2=(mask2[:,:,:3]*255).astype(np.uint8)
 mask3=np.load('../../data/cv2_mask.npy')
-mask3=(mask3*255).astype(np.uint8)
+mask3=(mask3[:,:,:3]*255).astype(np.uint8)
 mask4=np.load('../../data/cv3_mask.npy')
-mask4=(mask4*255).astype(np.uint8)
+mask4=(mask4[:,:,:3]*255).astype(np.uint8)
 mask5=np.load('../../data/cv4_mask.npy')
-mask5=(mask5*255).astype(np.uint8)
+mask5=(mask5[:,:,:3]*255).astype(np.uint8)
 
 np_data={'image1':image1,'image2':image2,'image3':image3,'image4':image4,'image5':image5,'mask1':mask1,'mask2':mask2,'mask3':mask3,'mask4':mask4,'mask5':mask5}
 
@@ -60,11 +60,11 @@ class CustomDataset(Dataset):
         image_path=tf(cv2.cvtColor(image_path, cv2.COLOR_GRAY2RGB))
         
         label_path = self.label[idx]
-        label_path = tf(cv2.resize(label_path, (512, 512)))
+        label_path = tf(cv2.resize(label_path[:,:,:3], (512, 512)))
        
         return image_path, label_path
     
-def dice_loss(pred, target, num_classes=4):
+def dice_loss(pred, target, num_classes=3):
     smooth = 1.
     dice_per_class = torch.zeros(num_classes).to(pred.device)
 
@@ -87,7 +87,7 @@ def dice_loss(pred, target, num_classes=4):
 
 
 metrics = defaultdict(float)
-for k in range(3,5):
+for k in range(5):
     val_loss=1000
     df=pd.DataFrame(columns=['epoch', 'train_loss', 'val_loss', 'train_acc', 'val_acc'])
     train_list=[0,1,2,3,4]
@@ -105,10 +105,10 @@ for k in range(3,5):
     val_dataset, batch_size=params['batch_size'], shuffle=True, drop_last=True)
     ealry_count=0
     model = smp.MAnet(
-        encoder_name="resnet34",        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
+        encoder_name="efficientnet-b5",        # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
         encoder_weights="imagenet",     # use `imagenet` pre-trained weights for encoder initialization
         in_channels=3,                  # model input channels (1 for gray-scale images, 3 for RGB, etc.)
-        classes=4,                      # model output channels (number of classes in your dataset) 
+        classes=3,                      # model output channels (number of classes in your dataset) 
     ).to(device)
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), lr=params['lr'], betas=(params['beta1'], params['beta2']))
@@ -156,7 +156,7 @@ for k in range(3,5):
             torch.save(model.state_dict(), '../../model/MANet/MANet_'+str(k+1)+'_check.pth')
         else:
             ealry_count+=1
-            if ealry_count==5:
+            if ealry_count==10:
                 break
         df.loc[len(df)]=[epoch+1,running_loss/len(train_dataloader),val_running_loss/len(validation_dataloader),1-running_loss/len(train_dataloader),1-val_running_loss/len(validation_dataloader)]
         df.to_csv('../../model/MANet/MANet_'+str(k+1)+'.csv',index=False)
