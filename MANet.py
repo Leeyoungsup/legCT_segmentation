@@ -16,13 +16,13 @@ import cv2
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 import pandas as pd
-device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
 tf=T.ToTensor()
 params={'image_size':512,
         'lr':2e-4,
         'beta1':0.5,
         'beta2':0.999,
-        'batch_size':16,
+        'batch_size':32,
         'epochs':100,}
 image1=np.load('../../data/cv0_ori.npy')
 image1=image1.astype(np.uint8)
@@ -35,15 +35,15 @@ image4=image4.astype(np.uint8)
 image5=np.load('../../data/cv4_ori.npy')
 image5=image5.astype(np.uint8)
 mask1=np.load('../../data/cv0_mask.npy')
-mask1=(mask1[:,:,:3]*255).astype(np.uint8)
+mask1=(mask1[:,:,:,:3]).astype(np.uint8)
 mask2=np.load('../../data/cv1_mask.npy')
-mask2=(mask2[:,:,:3]*255).astype(np.uint8)
+mask2=(mask2[:,:,:,:3]).astype(np.uint8)
 mask3=np.load('../../data/cv2_mask.npy')
-mask3=(mask3[:,:,:3]*255).astype(np.uint8)
+mask3=(mask3[:,:,:,:3]).astype(np.uint8)
 mask4=np.load('../../data/cv3_mask.npy')
-mask4=(mask4[:,:,:3]*255).astype(np.uint8)
+mask4=(mask4[:,:,:,:3]).astype(np.uint8)
 mask5=np.load('../../data/cv4_mask.npy')
-mask5=(mask5[:,:,:3]*255).astype(np.uint8)
+mask5=(mask5[:,:,:,:3]).astype(np.uint8)
 
 np_data={'image1':image1,'image2':image2,'image3':image3,'image4':image4,'image5':image5,'mask1':mask1,'mask2':mask2,'mask3':mask3,'mask4':mask4,'mask5':mask5}
 
@@ -80,14 +80,23 @@ def dice_loss(pred, target, num_classes=3):
             (2. * intersection + smooth) / (A_sum + B_sum + smooth)
 
     return torch.mean(dice_per_class)
+def iou_loss(pred, target, num_classes=3):
+    smooth = 1e-6
+    iou_per_class = torch.zeros(num_classes).to(pred.device)
 
+    for class_id in range(num_classes):
+        pred_class = pred[:, class_id, ...]
+        target_class = target[:, class_id, ...]
 
+        intersection = torch.sum(pred_class * target_class)
+        union = torch.sum(pred_class) + torch.sum(target_class) - intersection
 
+        iou_per_class[class_id] = 1 - (intersection + smooth) / (union + smooth)
 
-
-
+    return torch.mean(iou_per_class)
+    
 metrics = defaultdict(float)
-for k in range(5):
+for k in range(2,5):
     val_loss=1000
     df=pd.DataFrame(columns=['epoch', 'train_loss', 'val_loss', 'train_acc', 'val_acc'])
     train_list=[0,1,2,3,4]
@@ -96,9 +105,9 @@ for k in range(5):
     train_mask=np.concatenate([np_data['mask'+str(i+1)] for i in train_list])
     val_image=np_data['image'+str(k+1)]
     val_mask=np_data['mask'+str(k+1)]
-    train_dataset = CustomDataset(image1, mask1)
+    train_dataset = CustomDataset(train_image, train_mask)
 
-    val_dataset = CustomDataset(image1, mask1)
+    val_dataset = CustomDataset(val_image, val_mask)
     train_dataloader = DataLoader(
     train_dataset, batch_size=params['batch_size'], shuffle=True, drop_last=True)
     validation_dataloader = DataLoader(
@@ -124,14 +133,14 @@ for k in range(5):
             x = x.to(device).float()
             optimizer.zero_grad()  # optimizer zero 로 초기화
             predict = model(x).to(device)
-            cost = dice_loss(predict, y)  # cost 구함
+            cost = iou_loss(predict, y)  # cost 구함
             acc = 1-cost.item()
             cost.backward()  # cost에 대한 backward 구함
             optimizer.step()
             running_loss += cost.item()
             acc_loss += acc
             train.set_description(
-                f"epoch: {epoch+1}/{300} Step: {count+1} dice_loss : {running_loss/count:.4f} dice_score: {1-running_loss/count:.4f}")
+                f"epoch: {epoch+1}/{300} Step: {count+1} iou_loss : {running_loss/count:.4f} iou_score: {1-running_loss/count:.4f}")
             
         with torch.no_grad():
             val = tqdm(validation_dataloader)
@@ -144,19 +153,19 @@ for k in range(5):
                 count += 1
                 x = x.to(device).float()
                 predict = model(x).to(device)
-                cost = dice_loss(predict, y)  # cost 구함
+                cost= iou_loss(predict, y)  # cost 구함
                 acc = 1-cost.item()
                 val_running_loss += cost.item()
                 acc_loss += acc
                 val.set_description(
-                    f"val_epoch: {epoch+1}/{300} Step: {count+1} dice_loss : {val_running_loss/count:.4f} dice_score: {1-val_running_loss/count:.4f}")
+                    f"val_epoch: {epoch+1}/{300} Step: {count+1} iou_loss : {val_running_loss/count:.4f} iou_score: {1-val_running_loss/count:.4f}")
         if val_loss>(val_running_loss/count):
             ealry_count=0
             val_loss=val_running_loss/count
             torch.save(model.state_dict(), '../../model/MANet/MANet_'+str(k+1)+'_check.pth')
         else:
             ealry_count+=1
-            if ealry_count==10:
+            if epoch>10 and ealry_count==3:
                 break
         df.loc[len(df)]=[epoch+1,running_loss/len(train_dataloader),val_running_loss/len(validation_dataloader),1-running_loss/len(train_dataloader),1-val_running_loss/len(validation_dataloader)]
         df.to_csv('../../model/MANet/MANet_'+str(k+1)+'.csv',index=False)
