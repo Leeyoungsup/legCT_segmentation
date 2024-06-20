@@ -14,7 +14,7 @@ import cv2
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 import pandas as pd
-device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
 tf=T.ToTensor()
 params={'image_size':512,
         'lr':2e-4,
@@ -81,7 +81,7 @@ def dice_loss(pred, target, num_classes=3):
 
     
 metrics = defaultdict(float)
-for k in range(5):
+for k in range(3,5):
     val_loss=1000
     df=pd.DataFrame(columns=['epoch', 'train_loss', 'val_loss', 'train_acc', 'val_acc'])
     train_list=[0,1,2,3,4]

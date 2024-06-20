@@ -16,13 +16,13 @@ import cv2
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 import pandas as pd
-device = torch.device("cuda:4" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 tf=T.ToTensor()
 params={'image_size':512,
         'lr':2e-4,
         'beta1':0.5,
         'beta2':0.999,
-        'batch_size':16,
+        'batch_size':32,
         'epochs':100,}
 image1=np.load('../../data/cv0_ori.npy')
 image1=image1.astype(np.uint8)
@@ -82,7 +82,7 @@ def dice_loss(pred, target, num_classes=3):
     return torch.mean(dice_per_class)
     
 metrics = defaultdict(float)
-for k in range(5):
+for k in range(3,5):
     val_loss=1000
     df=pd.DataFrame(columns=['epoch', 'train_loss', 'val_loss', 'train_acc', 'val_acc'])
     train_list=[0,1,2,3,4]
