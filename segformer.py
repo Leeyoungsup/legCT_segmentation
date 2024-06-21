@@ -20,7 +20,7 @@ params={'image_size':512,
         'lr':2e-4,
         'beta1':0.5,
         'beta2':0.999,
-        'batch_size':20,
+        'batch_size':16,
         'epochs':100,}
 image1=np.load('../../data/cv0_ori.npy')
 image1=image1.astype(np.uint8)
@@ -98,7 +98,7 @@ for k in range(3,5):
     validation_dataloader = DataLoader(
     val_dataset, batch_size=params['batch_size'], shuffle=True, drop_last=True)
     ealry_count=0
-    model = AutoModelForSemanticSegmentation.from_pretrained("mattmdjaga/segformer_b2_clothes",num_labels=3,ignore_mismatched_sizes=True).to(device)
+    model = AutoModelForSemanticSegmentation.from_pretrained("matei-dorian/segformer-b5-finetuned-human-parsing",num_labels=3,ignore_mismatched_sizes=True).to(device)
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), lr=params['lr'], betas=(params['beta1'], params['beta2']))
     for epoch in range(300):
